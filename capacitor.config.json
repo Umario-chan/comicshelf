@@ -1,0 +1,11 @@
+{
+  "appId": "com.comicshelf.app",
+  "appName": "ComicShelf",
+  "webDir": "src",
+  "android": {
+    "minSdkVersion": 23
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

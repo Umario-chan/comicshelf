@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ComicShelf</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+  <!-- ══ SETUP ══════════════════════════════════════════════════════════════ -->
+  <div id="screen-setup" class="screen">
+    <div class="setup-wrap">
+      <div class="setup-icon">📚</div>
+      <h1 class="setup-title">ComicShelf</h1>
+      <p class="setup-sub">Tu biblioteca de cómics digital</p>
+      <p class="setup-desc">Selecciona la carpeta donde guardas tus archivos <strong>.cbz</strong>, <strong>.cbr</strong> o <strong>.pdf</strong></p>
+      <button id="btn-pick-folder" class="btn-primary">📁 Seleccionar carpeta</button>
+    </div>
+  </div>
+
+  <!-- ══ LIBRARY ═════════════════════════════════════════════════════════════ -->
+  <div id="screen-library" class="screen hidden">
+    <div class="header">
+      <button id="btn-change-folder" class="hdr-icon-btn" title="Cambiar carpeta">📁</button>
+      <button id="btn-back" class="hdr-icon-btn hidden" title="Atrás">←</button>
+      <h1 id="hdr-title" class="hdr-title">ComicShelf</h1>
+      <button id="btn-refresh" class="hdr-icon-btn" title="Actualizar">↻</button>
+    </div>
+    <div id="library-empty" class="empty-state hidden">
+      <div class="empty-icon">📭</div>
+      <p class="empty-text">No se encontraron archivos CBZ, CBR o PDF en la carpeta seleccionada</p>
+      <button id="btn-pick-folder-2" class="btn-primary">Seleccionar otra carpeta</button>
+    </div>
+    <div id="bookshelf" class="bookshelf-cabinet"></div>
+  </div>
+
+  <!-- ══ READER ══════════════════════════════════════════════════════════════ -->
+  <div id="screen-reader" class="screen hidden">
+    <!-- Pages area -->
+    <div id="reader-viewport" class="reader-viewport">
+      <div id="reader-loading" class="reader-loading">
+        <div class="spinner"></div>
+        <p id="reader-loading-msg">Abriendo…</p>
+        <p id="reader-comic-name" class="reader-loading-name"></p>
+      </div>
+      <div id="reader-pages" class="reader-pages"></div>
+    </div>
+
+    <!-- Overlay (tap to show/hide) -->
+    <div id="reader-overlay" class="reader-overlay hidden">
+      <!-- Top bar -->
+      <div class="reader-top-bar">
+        <button id="btn-reader-back" class="rdr-btn">✕</button>
+        <span id="reader-title" class="rdr-title"></span>
+        <button id="btn-toggle-orientation" class="rdr-pill" title="Girar pantalla">↻</button>
+        <button id="btn-toggle-dir" class="rdr-pill">W</button>
+      </div>
+      <!-- Bottom bar -->
+      <div class="reader-bottom-bar">
+        <div class="reader-scrubber-row">
+          <div id="reader-scrubber" class="reader-scrubber">
+            <div class="reader-scrubber-track">
+              <div id="reader-scrubber-fill" class="reader-scrubber-fill"></div>
+              <div id="reader-scrubber-thumb" class="reader-scrubber-thumb"></div>
+            </div>
+          </div>
+        </div>
+        <div class="reader-nav-row">
+          <button id="btn-prev" class="rdr-nav">‹</button>
+          <button id="btn-page-counter" class="rdr-counter">1 / 1</button>
+          <button id="btn-next" class="rdr-nav">›</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="reader-error" class="reader-error hidden">
+      <p class="reader-error-icon">⚠️</p>
+      <p id="reader-error-msg" class="reader-error-msg"></p>
+      <button id="btn-reader-back-err" class="btn-primary">Volver</button>
+    </div>
+  </div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/bridge.js"></script>
+  <script src="js/cbz.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/reader.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

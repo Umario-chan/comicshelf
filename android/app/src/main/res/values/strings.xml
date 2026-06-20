@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ComicShelf</string>
+    <string name="title_activity_main">ComicShelf</string>
+    <string name="package_name">com.comicshelf.app</string>
+    <string name="custom_url_scheme">com.comicshelf.app</string>
+</resources>
