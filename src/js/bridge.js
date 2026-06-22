@@ -49,6 +49,13 @@ var Bridge = {
       });
   },
 
+  // Delete all cached cover thumbnails (force regeneration)
+  clearCovers: function() {
+    var p = this._plugin();
+    if (!p || !p.clearCovers) return Promise.resolve();
+    return p.clearCovers();
+  },
+
   // Move app to background (Android back-at-root behavior)
   minimizeApp: function() {
     var p = this._plugin();

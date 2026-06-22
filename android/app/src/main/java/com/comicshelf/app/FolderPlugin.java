@@ -149,9 +149,9 @@ public class FolderPlugin extends Plugin {
                     Uri uri = Uri.parse(uriStr);
                     String hash = Integer.toHexString(uri.toString().hashCode());
 
-                    File coverDir = new File(getContext().getCacheDir(), "covers");
-                    if (!coverDir.exists()) coverDir.mkdirs();
-                    File coverFile = new File(coverDir, hash + ".jpg");
+                    // Covers live in filesDir (persistent) — NOT cacheDir, which
+                    // Android may wipe on background/low storage, losing all covers.
+                    File coverFile = new File(coversDir(), hash + ".jpg");
 
                     if (!coverFile.exists()) {
                         if ("pdf".equals(type)) {
@@ -325,7 +325,34 @@ public class FolderPlugin extends Plugin {
         call.resolve();
     }
 
+    // ── Clear all cached covers (force regeneration from the UI) ─────────────
+    @PluginMethod
+    public void clearCovers(PluginCall call) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    File[] files = coversDir().listFiles();
+                    if (files != null) {
+                        for (File f : files) f.delete();
+                    }
+                    call.resolve();
+                } catch (Throwable e) {
+                    call.reject("Error limpiando portadas: " + e.getMessage());
+                }
+            }
+        }).start();
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    // Persistent covers directory (filesDir, not cacheDir) so the system never
+    // wipes saved covers between sessions.
+    private File coversDir() {
+        File dir = new File(getContext().getFilesDir(), "covers");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
 
     private File cacheRaw(Uri uri, String filename) throws Exception {
         File raw = new File(getContext().getCacheDir(), filename);

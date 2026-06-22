@@ -14,6 +14,7 @@ var Library = {
   load: function() {
     var uri = Storage.getFolderUri();
     if (!uri) { App.showSetup(); return; }
+    Library._migrateCoverCache();
     Library.rootUri = uri;
     Library.currentDocId = null;
     Library.navStack = [];
@@ -207,40 +208,45 @@ var Library = {
       if (idx >= comics.length) return;
       var comic = comics[idx++];
 
-      // 1) In-memory cache
+      // 1) In-memory cache (allow self-heal if the cached file vanished)
       if (Library._coverCache.hasOwnProperty(comic.uri)) {
         var cached = Library._coverCache[comic.uri];
-        try { cached ? Library._setCoverDisplay(comic.uri, cached) : Library._setCoverError(comic.uri); } catch(e) {}
+        try { cached ? Library._setCover(comic.uri, cached, true) : Library._setCoverError(comic.uri); } catch(e) {}
         next();
         return;
       }
 
-      // 2) localStorage cache
+      // 2) localStorage cache (allow self-heal if the cached file vanished)
       var stored = null;
       try { stored = localStorage.getItem('cover:' + comic.uri); } catch(e) {}
       if (stored) {
         Library._coverCache[comic.uri] = stored;
-        try { Library._setCoverDisplay(comic.uri, stored); } catch(e) {}
+        try { Library._setCover(comic.uri, stored, true); } catch(e) {}
         next();
         return;
       }
 
-      // 3) Load from native, then cache
-      CBZ.getCover(comic)
-        .then(
-          function(dataUrl) {
-            Library._coverCache[comic.uri] = dataUrl;
-            try { localStorage.setItem('cover:' + comic.uri, dataUrl); } catch(e) {}
-            try { Library._setCover(comic.uri, dataUrl); } catch(e) {}
-          },
-          function() {
-            Library._coverCache[comic.uri] = null;
-            try { Library._setCoverError(comic.uri); } catch(e) {}
-          }
-        )
-        .then(function() { next(); });
+      // 3) Extract from native, then cache
+      Library._fetchCover(comic).then(function() { next(); });
     }
     next();
+  },
+
+  // Extract a cover from native, persist it to both cache layers, and display.
+  // A freshly extracted cover does not self-heal on display error (false) to
+  // avoid an endless re-extract loop when an image genuinely cannot render.
+  _fetchCover: function(comic) {
+    return CBZ.getCover(comic).then(
+      function(dataUrl) {
+        Library._coverCache[comic.uri] = dataUrl;
+        try { localStorage.setItem('cover:' + comic.uri, dataUrl); } catch(e) {}
+        try { Library._setCover(comic.uri, dataUrl, false); } catch(e) {}
+      },
+      function() {
+        Library._coverCache[comic.uri] = null;
+        try { Library._setCoverError(comic.uri); } catch(e) {}
+      }
+    );
   },
 
   // Finds a book element without using CSS.escape (not available on all Android 6 WebViews)
@@ -252,12 +258,26 @@ var Library = {
     return null;
   },
 
-  // Called when cover comes from cache (no async gap, so DOM is ready)
-  _setCoverDisplay: function(uri, dataUrl) {
-    Library._setCover(uri, dataUrl);
+  // Reset a book's cover back to the loading spinner (before re-extraction)
+  _showCoverLoading: function(uri) {
+    var bookEl = Library._findBook(uri);
+    if (!bookEl) return;
+    var coverEl = bookEl.querySelector('.book-cover');
+    if (!coverEl) return;
+    var img = coverEl.querySelector('img');
+    if (img) img.remove();
+    var ph = coverEl.querySelector('.book-cover-placeholder');
+    if (!ph) {
+      ph = document.createElement('div');
+      coverEl.insertBefore(ph, coverEl.firstChild);
+    }
+    ph.className = 'book-cover-placeholder book-loading';
+    ph.innerHTML = '<div class="spinner-small"></div>';
   },
 
-  _setCover: function(uri, dataUrl) {
+  // allowRefetch: if the cached image fails to load (file was wiped), drop the
+  // stale cache entry and re-extract once from native to self-heal.
+  _setCover: function(uri, dataUrl, allowRefetch) {
     var bookEl = Library._findBook(uri);
     if (!bookEl) return;
     var coverEl = bookEl.querySelector('.book-cover');
@@ -266,6 +286,12 @@ var Library = {
     img.draggable = false;
     img.onerror = function() {
       this.remove();
+      if (allowRefetch) {
+        delete Library._coverCache[uri];
+        try { localStorage.removeItem('cover:' + uri); } catch(e) {}
+        var comic = Library.comics.find(function(c) { return c.uri === uri; });
+        if (comic) { Library._showCoverLoading(uri); Library._fetchCover(comic); return; }
+      }
       Library._setCoverError(uri);
     };
     var placeholder = coverEl.querySelector('.book-cover-placeholder');
@@ -300,6 +326,38 @@ var Library = {
     return String(str)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+
+  // One-time migration: older builds saved covers in the volatile cache dir,
+  // so any cached URLs now point at files the system may have wiped. Drop them
+  // once so they get re-extracted into the new persistent location.
+  _migrateCoverCache: function() {
+    try {
+      if (localStorage.getItem('coverCacheVersion') === '2') return;
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('cover:') === 0) keys.push(k);
+      }
+      keys.forEach(function(k) { localStorage.removeItem(k); });
+      localStorage.setItem('coverCacheVersion', '2');
+    } catch(e) {}
+  },
+
+  // Force a full re-extraction of every cover in the current folder.
+  reloadCovers: function() {
+    if (!Library.comics.length) return;
+    // Drop every cache layer and show spinners for the visible comics
+    Library.comics.forEach(function(c) {
+      delete Library._coverCache[c.uri];
+      try { localStorage.removeItem('cover:' + c.uri); } catch(e) {}
+      Library._showCoverLoading(c.uri);
+    });
+    // Wipe the native cover files, then regenerate (regenerate regardless of result)
+    Bridge.clearCovers().then(
+      function() { Library._loadCoversSequentially(); },
+      function() { Library._loadCoversSequentially(); }
+    );
   },
 
   refreshProgress: function(uri) {

@@ -8,6 +8,7 @@ var App = {
     document.getElementById('btn-change-folder').addEventListener('click', App.pickFolder);
     document.getElementById('btn-back').addEventListener('click', function() { Library.back(); });
     document.getElementById('btn-refresh').addEventListener('click', function() { Library.refresh(); });
+    document.getElementById('btn-reload-covers').addEventListener('click', function() { Library.reloadCovers(); });
 
     var uri = Storage.getFolderUri();
     if (uri) {
