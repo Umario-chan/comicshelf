@@ -86,6 +86,22 @@
     </div>
   </div>
 
+  <!-- ══ CONTEXT MENU (mantener presionado un tomo) ═══════════════════════════ -->
+  <div id="ctx-menu" class="ctx-overlay hidden">
+    <div class="ctx-sheet">
+      <div id="ctx-title" class="ctx-title"></div>
+      <button class="ctx-item" data-action="open">📖 Abrir</button>
+      <button class="ctx-item" data-action="read">✓ Marcar como leído</button>
+      <button class="ctx-item" data-action="unread">↺ Marcar como no leído</button>
+      <button class="ctx-item" data-action="reload-cover">🖼️ Recargar portada</button>
+      <button class="ctx-item ctx-danger" data-action="delete">🗑️ Eliminar archivo</button>
+      <button class="ctx-item ctx-cancel" data-action="cancel">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Toast global -->
+  <div id="toast" class="toast hidden"></div>
+
   <script src="js/storage.js"></script>
   <script src="js/bridge.js"></script>
   <script src="js/cbz.js"></script>

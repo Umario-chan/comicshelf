@@ -48,7 +48,9 @@ public class FolderPlugin extends Plugin {
     @PluginMethod
     public void pickFolder(PluginCall call) {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        // Request WRITE too so files can be deleted from the library later
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         startActivityForResult(call, intent, "handleFolderResult");
     }
@@ -59,7 +61,8 @@ public class FolderPlugin extends Plugin {
         if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
             Uri uri = result.getData().getData();
             getActivity().getContentResolver().takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             JSObject ret = new JSObject();
             ret.put("uri", uri.toString());
             ret.put("displayName", uri.getLastPathSegment());
@@ -140,6 +143,7 @@ public class FolderPlugin extends Plugin {
     public void getCoverNative(PluginCall call) {
         final String uriStr = call.getString("uri");
         final String type   = call.getString("type", "cbr");
+        final boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
         if (uriStr == null) { call.reject("uri requerido"); return; }
 
         new Thread(new Runnable() {
@@ -152,6 +156,9 @@ public class FolderPlugin extends Plugin {
                     // Covers live in filesDir (persistent) — NOT cacheDir, which
                     // Android may wipe on background/low storage, losing all covers.
                     File coverFile = new File(coversDir(), hash + ".jpg");
+
+                    // force = regenerate even if a cached cover already exists
+                    if (force && coverFile.exists()) coverFile.delete();
 
                     if (!coverFile.exists()) {
                         if ("pdf".equals(type)) {
@@ -323,6 +330,29 @@ public class FolderPlugin extends Plugin {
             }
         });
         call.resolve();
+    }
+
+    // ── Delete a comic file from storage (SAF) ───────────────────────────────
+    @PluginMethod
+    public void deleteFile(PluginCall call) {
+        final String uriStr = call.getString("uri");
+        if (uriStr == null) { call.reject("uri requerido"); return; }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Uri uri = Uri.parse(uriStr);
+                    boolean ok = DocumentsContract.deleteDocument(
+                            getContext().getContentResolver(), uri);
+                    if (!ok) throw new Exception("El sistema rechazó la eliminación");
+                    JSObject ret = new JSObject();
+                    ret.put("deleted", true);
+                    call.resolve(ret);
+                } catch (Throwable e) {
+                    call.reject("Error eliminando archivo [" + e.getClass().getSimpleName() + "]: " + e.getMessage());
+                }
+            }
+        }).start();
     }
 
     // ── Clear all cached covers (force regeneration from the UI) ─────────────

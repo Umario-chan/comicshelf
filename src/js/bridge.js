@@ -27,14 +27,22 @@ var Bridge = {
     return p.cacheFile({ uri: uri });
   },
 
-  // Get cover image for CBR/PDF (first page only) → URL string
-  getCoverNative: function(uri, type) {
+  // Get cover image for CBR/PDF (first page only) → URL string.
+  // force = regenerate the cover even if one is already cached.
+  getCoverNative: function(uri, type, force) {
     var p = this._plugin();
     if (!p) return Promise.reject(new Error('FolderPlugin not available'));
-    return p.getCoverNative({ uri: uri, type: type })
+    return p.getCoverNative({ uri: uri, type: type, force: !!force })
       .then(function(res) {
         return Bridge.toUrl(res.path);
       });
+  },
+
+  // Delete a comic file from storage → { deleted: true }
+  deleteFile: function(uri) {
+    var p = this._plugin();
+    if (!p || !p.deleteFile) return Promise.reject(new Error('FolderPlugin not available'));
+    return p.deleteFile({ uri: uri });
   },
 
   // Extract all pages for CBR/PDF → array of URL strings

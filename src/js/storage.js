@@ -24,6 +24,15 @@ var Storage = {
   resetProgress: function(uri) {
     this.remove('progress:' + uri);
   },
+  // Mark a comic as fully read (keeps page count if known)
+  markCompleted: function(uri) {
+    var cur = this.getProgress(uri);
+    this.set('progress:' + uri, {
+      currentPage: cur.totalPages > 0 ? cur.totalPages - 1 : (cur.currentPage || 0),
+      totalPages: cur.totalPages || 0,
+      completed: true
+    });
+  },
 
   // Library
   getFolderUri: function() { return this.get('folderUri'); },

@@ -7,11 +7,12 @@ var CBZ = {
     return 'cbz';
   },
 
-  // Get cover image — accepts {uri, name} object or bare URI string
-  getCover: function(comic) {
+  // Get cover image — accepts {uri, name} object or bare URI string.
+  // force = regenerate the cover even if one is already cached.
+  getCover: function(comic, force) {
     var uri  = typeof comic === 'string' ? comic : comic.uri;
     var type = typeof comic === 'string' ? 'cbz' : CBZ._type(comic.name);
-    return Bridge.getCoverNative(uri, type);
+    return Bridge.getCoverNative(uri, type, force);
   },
 
   // Extract all pages — accepts {uri, name} object or bare URI string

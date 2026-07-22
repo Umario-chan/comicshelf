@@ -172,11 +172,7 @@ var Library = {
 
       booksRow.appendChild(bookWrap);
 
-      bookWrap.querySelector('.book').addEventListener('click', function(e) {
-        var uri = e.currentTarget.dataset.uri;
-        var found = Library.comics.find(function(c) { return c.uri === uri; });
-        if (found) Reader.open(found);
-      });
+      Library._attachBookHandlers(bookWrap.querySelector('.book'), comic);
     });
 
     // Filler books for incomplete rows
@@ -235,8 +231,8 @@ var Library = {
   // Extract a cover from native, persist it to both cache layers, and display.
   // A freshly extracted cover does not self-heal on display error (false) to
   // avoid an endless re-extract loop when an image genuinely cannot render.
-  _fetchCover: function(comic) {
-    return CBZ.getCover(comic).then(
+  _fetchCover: function(comic, force) {
+    return CBZ.getCover(comic, force).then(
       function(dataUrl) {
         Library._coverCache[comic.uri] = dataUrl;
         try { localStorage.setItem('cover:' + comic.uri, dataUrl); } catch(e) {}
@@ -357,6 +353,144 @@ var Library = {
     Bridge.clearCovers().then(
       function() { Library._loadCoversSequentially(); },
       function() { Library._loadCoversSequentially(); }
+    );
+  },
+
+  // ── Book tap + long-press handling ─────────────────────────────────────────
+  _attachBookHandlers: function(bookEl, comic) {
+    var pressTimer = null;
+    var longPressed = false;
+    var startX = 0, startY = 0;
+
+    function cancelPress() { clearTimeout(pressTimer); }
+
+    bookEl.addEventListener('touchstart', function(e) {
+      longPressed = false;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      cancelPress();
+      pressTimer = setTimeout(function() {
+        longPressed = true;
+        if (navigator.vibrate) { try { navigator.vibrate(15); } catch(e) {} }
+        Library.showContextMenu(comic);
+      }, 480);
+    }, { passive: true });
+
+    bookEl.addEventListener('touchmove', function(e) {
+      if (Math.abs(e.touches[0].clientX - startX) > 10 ||
+          Math.abs(e.touches[0].clientY - startY) > 10) cancelPress();
+    }, { passive: true });
+
+    bookEl.addEventListener('touchend', cancelPress, { passive: true });
+    bookEl.addEventListener('touchcancel', cancelPress, { passive: true });
+
+    bookEl.addEventListener('click', function() {
+      if (longPressed) { longPressed = false; return; } // long-press already handled
+      Reader.open(comic);
+    });
+  },
+
+  // ── Context menu ────────────────────────────────────────────────────────────
+  _ctxComic: null,
+
+  showContextMenu: function(comic) {
+    Library._ctxComic = comic;
+    var menu = document.getElementById('ctx-menu');
+    document.getElementById('ctx-title').textContent = Library._displayName(comic.name);
+
+    var prog = Storage.getProgress(comic.uri);
+    var hasProgress = prog.completed || (prog.currentPage > 0);
+    menu.querySelector('[data-action="read"]').classList.toggle('hidden', !!prog.completed);
+    menu.querySelector('[data-action="unread"]').classList.toggle('hidden', !hasProgress);
+
+    // Reset the delete confirm state every time the menu opens
+    var del = menu.querySelector('[data-action="delete"]');
+    del.dataset.confirm = '';
+    del.textContent = '🗑️ Eliminar archivo';
+
+    menu.classList.remove('hidden');
+  },
+
+  hideContextMenu: function() {
+    document.getElementById('ctx-menu').classList.add('hidden');
+    Library._ctxComic = null;
+  },
+
+  // Wire menu buttons once (called from App.init)
+  initContextMenu: function() {
+    var menu = document.getElementById('ctx-menu');
+    if (!menu) return;
+    // Tap outside the sheet closes the menu
+    menu.addEventListener('click', function(e) {
+      if (e.target === menu) Library.hideContextMenu();
+    });
+    menu.querySelectorAll('.ctx-item').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        Library._handleCtxAction(btn.dataset.action, btn);
+      });
+    });
+  },
+
+  _handleCtxAction: function(action, btn) {
+    var comic = Library._ctxComic;
+    if (!comic && action !== 'cancel') { Library.hideContextMenu(); return; }
+
+    switch (action) {
+      case 'open':
+        Library.hideContextMenu();
+        Reader.open(comic);
+        break;
+      case 'read':
+        Storage.markCompleted(comic.uri);
+        Library.refreshProgress(comic.uri);
+        Library.hideContextMenu();
+        break;
+      case 'unread':
+        Storage.resetProgress(comic.uri);
+        Library.refreshProgress(comic.uri);
+        Library.hideContextMenu();
+        break;
+      case 'reload-cover':
+        Library.hideContextMenu();
+        delete Library._coverCache[comic.uri];
+        try { localStorage.removeItem('cover:' + comic.uri); } catch(e) {}
+        Library._showCoverLoading(comic.uri);
+        Library._fetchCover(comic, true); // force = regenerate
+        break;
+      case 'delete':
+        // Two-tap confirm to avoid accidental deletion
+        if (btn && btn.dataset.confirm === '1') {
+          Library._doDelete(comic);
+        } else if (btn) {
+          btn.dataset.confirm = '1';
+          btn.textContent = '⚠️ Toca otra vez para eliminar';
+        }
+        break;
+      case 'cancel':
+      default:
+        Library.hideContextMenu();
+        break;
+    }
+  },
+
+  _doDelete: function(comic) {
+    Library.hideContextMenu();
+    Bridge.deleteFile(comic.uri).then(
+      function() {
+        delete Library._coverCache[comic.uri];
+        try { localStorage.removeItem('cover:' + comic.uri); } catch(e) {}
+        Storage.resetProgress(comic.uri);
+        if (window.showToast) window.showToast('Archivo eliminado');
+        Library.refresh(); // re-list folder (deleted file is gone)
+      },
+      function(err) {
+        var msg = (err && (err.message || err.errorMessage)) || '';
+        if (window.showToast) {
+          window.showToast(/permiso|permission|denied|rechaz/i.test(msg)
+            ? 'Sin permiso para borrar — reselecciona la carpeta con 📁'
+            : 'No se pudo eliminar el archivo');
+        }
+      }
     );
   },
 

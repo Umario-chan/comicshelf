@@ -2,6 +2,7 @@
 var App = {
   init: function() {
     Reader.init();
+    Library.initContextMenu();
 
     document.getElementById('btn-pick-folder').addEventListener('click', App.pickFolder);
     document.getElementById('btn-pick-folder-2').addEventListener('click', App.pickFolder);
@@ -43,6 +44,16 @@ var App = {
 };
 
 document.addEventListener('DOMContentLoaded', App.init);
+
+// Global toast helper
+window.showToast = function(msg, ms) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(function() { t.classList.add('hidden'); }, ms || 1600);
+};
 
 // Android hardware back button handler (called from MainActivity.onBackPressed)
 window._handleNativeBack = function() {
