@@ -46,6 +46,8 @@ dependencies {
     implementation project(':capacitor-cordova-android-plugins')
     implementation "androidx.documentfile:documentfile:1.0.1"
     implementation "com.github.junrar:junrar:7.5.5"
+    // RAR5 (junrar solo soporta RAR4)
+    implementation "com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.02"
 }
 
 apply from: 'capacitor.build.gradle'

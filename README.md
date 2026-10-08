@@ -9,7 +9,7 @@ Accede a carpetas del teléfono mediante el sistema de permisos de Android (SAF)
 ## Formatos soportados
 
 - `.cbz` — el más común, extracción por streaming directo
-- `.cbr` — soporte con librería junrar
+- `.cbr` — RAR4 con junrar, RAR5 con 7-Zip-JBinding
 - `.pdf` — renderizado nativo de Android
 
 ## Interfaz

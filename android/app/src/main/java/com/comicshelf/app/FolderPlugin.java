@@ -26,17 +26,30 @@ import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import com.github.junrar.Archive;
+import com.github.junrar.exception.UnsupportedRarV5Exception;
 import com.github.junrar.rarfile.FileHeader;
+
+import net.sf.sevenzipjbinding.IInArchive;
+import net.sf.sevenzipjbinding.ISequentialOutStream;
+import net.sf.sevenzipjbinding.SevenZip;
+import net.sf.sevenzipjbinding.SevenZipException;
+import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
+import net.sf.sevenzipjbinding.simple.ISimpleInArchive;
+import net.sf.sevenzipjbinding.simple.ISimpleInArchiveItem;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
@@ -530,6 +543,14 @@ public class FolderPlugin extends Plugin {
 
     // CBR cover: extract first image to temp file, then thumbnail
     private void extractFirstCbrImageAsThumb(File rarFile, File outFile) throws Exception {
+        try {
+            extractFirstCbrImageAsThumbRar4(rarFile, outFile);
+        } catch (UnsupportedRarV5Exception e) {
+            extractFirstCbrImageAsThumbRar5(rarFile, outFile);
+        }
+    }
+
+    private void extractFirstCbrImageAsThumbRar4(File rarFile, File outFile) throws Exception {
         Archive archive = new Archive(rarFile);
         try {
             List<FileHeader> headers = archive.getFileHeaders();
@@ -561,6 +582,14 @@ public class FolderPlugin extends Plugin {
     }
 
     private void extractCbrPages(File rarFile, File outDir, JSArray pages) throws Exception {
+        try {
+            extractCbrPagesRar4(rarFile, outDir, pages);
+        } catch (UnsupportedRarV5Exception e) {
+            extractCbrPagesRar5(rarFile, outDir, pages);
+        }
+    }
+
+    private void extractCbrPagesRar4(File rarFile, File outDir, JSArray pages) throws Exception {
         Archive archive = new Archive(rarFile);
         try {
             List<FileHeader> headers = archive.getFileHeaders();
@@ -587,6 +616,80 @@ public class FolderPlugin extends Plugin {
         } finally {
             archive.close();
         }
+    }
+
+    // ── RAR5 fallback (7-Zip-JBinding; junrar solo soporta RAR4) ─────────────
+
+    private void extractFirstCbrImageAsThumbRar5(File rarFile, File outFile) throws Exception {
+        RandomAccessFile raf = new RandomAccessFile(rarFile, "r");
+        IInArchive archive = SevenZip.openInArchive(null, new RandomAccessFileInStream(raf));
+        try {
+            List<ISimpleInArchiveItem> items = sortedRarImageItems(archive);
+            if (items.isEmpty()) throw new Exception("No se encontraron imágenes en el CBR");
+            File tmp = new File(outFile.getParent(), outFile.getName() + ".rawtmp");
+            extractRarItemToFile(items.get(0), tmp);
+            try {
+                saveThumbnail(tmp, outFile);
+            } finally { tmp.delete(); }
+        } finally {
+            archive.close();
+            raf.close();
+        }
+    }
+
+    private void extractCbrPagesRar5(File rarFile, File outDir, JSArray pages) throws Exception {
+        RandomAccessFile raf = new RandomAccessFile(rarFile, "r");
+        IInArchive archive = SevenZip.openInArchive(null, new RandomAccessFileInStream(raf));
+        try {
+            List<ISimpleInArchiveItem> items = sortedRarImageItems(archive);
+            if (items.isEmpty()) throw new Exception("No se encontraron imágenes en el CBR");
+            int idx = 0;
+            for (ISimpleInArchiveItem item : items) {
+                File imgFile = new File(outDir, String.format("%04d.jpg", idx++));
+                extractRarItemToFile(item, imgFile);
+                pages.put(imgFile.getAbsolutePath());
+            }
+        } finally {
+            archive.close();
+            raf.close();
+        }
+    }
+
+    private List<ISimpleInArchiveItem> sortedRarImageItems(IInArchive archive) throws Exception {
+        ISimpleInArchive simple = archive.getSimpleInterface();
+        final List<ISimpleInArchiveItem> items = new ArrayList<>();
+        final Map<ISimpleInArchiveItem, String> names = new HashMap<>();
+        for (ISimpleInArchiveItem item : simple.getArchiveItems()) {
+            if (item.isFolder()) continue;
+            String name = item.getPath();
+            if (name == null || !isImageFile(name.toLowerCase())) continue;
+            items.add(item);
+            names.put(item, name);
+        }
+        Collections.sort(items, new Comparator<ISimpleInArchiveItem>() {
+            @Override
+            public int compare(ISimpleInArchiveItem a, ISimpleInArchiveItem b) {
+                return names.get(a).compareToIgnoreCase(names.get(b));
+            }
+        });
+        return items;
+    }
+
+    private void extractRarItemToFile(ISimpleInArchiveItem item, File out) throws Exception {
+        final FileOutputStream fos = new FileOutputStream(out);
+        try {
+            item.extractSlow(new ISequentialOutStream() {
+                @Override
+                public int write(byte[] data) throws SevenZipException {
+                    try {
+                        fos.write(data);
+                    } catch (IOException e) {
+                        throw new SevenZipException(e.getMessage());
+                    }
+                    return data.length;
+                }
+            });
+        } finally { fos.close(); }
     }
 
     private boolean isImageFile(String name) {
